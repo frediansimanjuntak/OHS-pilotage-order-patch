@@ -6,7 +6,7 @@ Here the seeder data to execute data patch that resources from json
 
 1. Clone this repository.
 
-    `git clone https://github.com/frediansimanjuntak/OHS-pilotage-order-patch.git
+    `git clone https://github.com/frediansimanjuntak/OHS-pilotage-order-patch.git`
 
 2. Move all file in folder "/seeds" into "{project-folder}/database/seeds".
 
@@ -18,6 +18,7 @@ Here the seeder data to execute data patch that resources from json
 
 6. To run the seeder you can use this command, and data patch will execute.
 
-    `php artisan db:seed --class=PilotageOrderSeeder
-    `php artisan db:seed --class=PilotEventSeeder
+    `php artisan db:seed --class=PilotageOrderSeeder`
+    
+    `php artisan db:seed --class=PilotEventSeeder`
 
