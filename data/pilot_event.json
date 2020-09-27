@@ -1,0 +1,27 @@
+[
+    {
+        "header": "pilotServiceInfo",
+        "pilotServiceInfo": {
+            "OrderNumber": "SRTBETST932",
+            "SequenceNumber": "01",
+            "Advice": "D",
+            "DeployDate": "",
+            "ArriveDate": "2020-09-28 14:30",
+            "OnboardDate": "",
+            "StartDate": "",
+            "EndDate": "",
+            "Duration": "130",
+            "BillableStartDate": "2019-06-28 11:55",
+            "BillableEndDate": "2019-06-28 14:05",
+            "GridFromCode": "",
+            "GridToCode": "",
+            "LocationFromCode": "PWBGB",
+            "LocationToCode": "HH2",
+            "PilotCode": "ALAN",
+            "PONRIndicator": "",
+            "VerifyIndicator": "Y",
+            "PCTEventCode": "START",
+            "Source": "SM UI"
+        }
+    }
+]

@@ -17,15 +17,20 @@ use Modules\User\Entities\Surveyor;
 use Modules\Vessel\Entities\Vessel;
 use Modules\Order\Repositories\OrderRepository;
 use Modules\Order\Repositories\PilotageOrderRepository;
+use Modules\Order\Repositories\VesselPilotOrderRepository;
+use App\Common\Helper;
 use Carbon\Carbon;
 
 class PilotageOrderSeeder extends Seeder
 {
-    private $order;
+    protected $order;
+    protected $pilotageorder;
+    protected $vesselpilotorder;
 
-    public function __construct(OrderRepository $order, PilotageOrderRepository $pilotageorder) {
+    public function __construct(OrderRepository $order, PilotageOrderRepository $pilotageorder, VesselPilotOrderRepository $vesselpilotorder) {
         $this->order = $order;
         $this->pilotageorder = $pilotageorder;
+        $this->vesselpilotorder = $vesselpilotorder;
     }
 
     /**
@@ -43,7 +48,6 @@ class PilotageOrderSeeder extends Seeder
         uasort($datas, function($a, $b) {
             return strtotime($a['pilotOrder']['TOADate']) - strtotime($b['pilotOrder']['TOADate']);
         });
-        Log::info($datas);
 
         $results = [];
         foreach ($datas as $value) {
@@ -59,19 +63,23 @@ class PilotageOrderSeeder extends Seeder
                 }
             } elseif($data['AdviceCode']=='A' || $data['AdviceCode']=='W'){
                 $result = $this->pilotageOrderUpdate($data['OrderNumber'], $data);
+            } 
+            elseif($data['AdviceCode']=='D'){
+                $result = $this->pilotageOrderDelete($data['OrderNumber']);
             }
 
             // Push result to see the log in the end
             array_push($results, $result);
-
-            if (isset($pilotage_order) && !empty($pilotage_order)) {
-                $last_pilotage_order = $pilotage_order;
-                $current_TOA = Carbon::parse($data['TOADate']);
-                // Create vessel email
-                $this->storeVesselEmail($data['OrderNumber'], $current_TOA);
+            if ($data['AdviceCode']!='D') {
+                if (isset($pilotage_order) && !empty($pilotage_order)) {
+                    $last_pilotage_order = $pilotage_order;
+                    $current_TOA = Carbon::parse($data['TOADate']);
+                    // Create vessel email
+                    $this->storeVesselEmail($data['OrderNumber'], $current_TOA);
+                }
             }
         }  
-        Log::info('result');
+        Log::info('results :');
         Log::info($results);      
     }
 
@@ -525,6 +533,33 @@ class PilotageOrderSeeder extends Seeder
         return $result;
     }
 
+    public function pilotageOrderDelete($orderNumber)
+    {
+        $del = $this->pilotageorder->findByAttributes(array('OrderNumber' => $orderNumber));
+        $delVesselOrder = $this->vesselpilotorder->findByAttributes(array('order_pilot_id' => $orderNumber));
+
+        if (!$del) {
+            Log::error('Mos Synchronize: Pilotage order deletion failed, not exist');
+        }
+
+        if ($delVesselOrder) {
+            // Check vessel voyage
+            $pilotageorder = $del;
+            $vessel = Vessel::where('vessel_id', $pilotageorder->vessel_id)->first();
+
+            // Current datetime
+            $current_date_time = (new \DateTime("now", new \DateTimeZone(Setting::get('core::default-timezone'))));
+            $current_date_time = $current_date_time->format('Y-m-d H:i');  
+
+            Log::info('Mos Synchronize: Vessel Pilotage order is deleted: Successfully');
+            $delVesselOrder->delete();
+        }
+        // Update vessel master email when pilotage deleted
+        VesselMasterEmail::where(['order_number' => $orderNumber, 'status' => 'active'])->update(['status' => 'inactive']);
+        $del->delete();
+        Log::info('Mos Synchronize: Pilotage order is deleted: Successfully');
+    }
+
     private function storeVesselEmail($order_id, $sent_date) {
         $vpc_data  = VesselPilotOrder::where('order_pilot_id',$order_id)->first();
         $vessel_id = $vpc_data->vessel_id;
@@ -573,8 +608,6 @@ class PilotageOrderSeeder extends Seeder
         $this->order = $order;        
         $req = $data;
         $data['VesselID'] = $data['vessel_id'];
-        Log::info('Create Request:');
-        Log::info($req);
         // Order Linking  to oil terminal order
         if (isset($data['VesselID']) && (isset($agent_id) && $agent_id!=null) && isset($req['LocationTo']) && !empty($req['LocationTo'])  && isset($req['PilotJobType']) && !empty($req['PilotJobType']))  {
             if($req['PilotJobType'] === 'BE' || $req['PilotJobType'] === 'UB' || $req['PilotJobType'] === 'SH'){
@@ -651,8 +684,6 @@ class PilotageOrderSeeder extends Seeder
     }
 
     public function OrderLinkToTerminalOrdersAtUpdate($data,$agent_id, $order,$pilotage_order, $req){
-        Log::info('Update Request:');
-        Log::info($req);
         if (isset($req['CSTDate']) && !empty($req['CSTDate'])) {
             if ($pilotage_order->CSTDate !== $req['CSTDate']) {
                 if (isset($data['VesselID']) && isset($agent_id) && !empty($agent_id) && isset($req['LocationTo']) && !empty($req['LocationTo'])  && isset($req['PilotJobType']) && !empty($req['PilotJobType']))  {
