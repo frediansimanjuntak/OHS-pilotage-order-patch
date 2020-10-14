@@ -52,8 +52,10 @@ class PilotageOrderSeeder extends Seeder
         //     return strtotime($a['pilotOrder']['TOADate']) - strtotime($b['pilotOrder']['TOADate']);
         // });
 
-        foreach ($datas as $value) {
+        foreach ($datas as $key=>$value) {
             $data = $value['pilotOrder'];
+            Log::info('=======================================');
+            Log::info('Index : '. $key);
             Log::info('Order Number : '. $data['OrderNumber']);
             // Check if already exist
             $pilotage_order =  PilotageOrder::where('OrderNumber', $data['OrderNumber'])->first();
@@ -277,7 +279,7 @@ class PilotageOrderSeeder extends Seeder
         if (isset($data['LocationTo']) && !empty($data['LocationTo'])){
             BunkerActivity::where(['OrderNumber'=>$data['OrderNumber']])->update(['ActivityLocation' => $data['LocationTo']]);
         }
-        Log::info('Mos Synchronize: pilot order created with Order Number '.$data['OrderNumber']);
+        Log::info('Mos Synchronize: Pilot order created with Order Number '.$data['OrderNumber'].' : Successfully ');
     }
 
     public function doActivitySyncPendingTask($pilotageorder,$activity,$activities,$key,$count) {
@@ -375,157 +377,159 @@ class PilotageOrderSeeder extends Seeder
 
         $pilotage = PilotageOrder::where('OrderNumber', $id)->first();
         if (!$pilotage) {
-            Log::error('Mos Synchronize: Pilotage Order Number is deleted or not exist in database for update');
+            Log::error('Mos Synchronize: Pilotage Order Number '.$id.' is deleted or not exist in database for update');
             Log::error('Pilotage Order Number is deleted or not exist in database for update, Please Use Advice code = N to create it first');
-        }
+        } else {
+            $pilotage_order = $pilotage;
 
-        $pilotage_order = $pilotage;
+            // Order Linking to oil terminal order
+            try{
+                Log::info('In update order: Trying linking pilotage order to existing terminal orders for existing agent...');
+                $this->OrderLinkToTerminalOrdersAtUpdate($data,$agent_id,$this->order,$pilotage_order, $data);
+                Log::info('Linking process done...');
+            }catch (\Exception $e){
+                Log::info('Problem with order linking...:-'.$e->getMessage());
+            }
+            
+            $data['ETBDate'] = trim($data['ETBDate']);
+            $pilotage_order_data = [
+                'vessel_id' => $data['VesselID'],
+                'OrderNumber' => $data['OrderNumber'],
+                'CustAccount' => $data['CustAccount'],
+                'JobType' => $data['JobType'], 
+                'PilotJobType' => $data['PilotJobType'],
+                'EventAlertIndicator' => $data['EventAlertIndicator'],
+                'TOADate' => $data['TOADate'],
+                'CSTDate' => $data['CSTDate'],
+                'SRTDate' => $data['SRTDate'],
+                'ETBDate' => $data['ETBDate'],
+                'PresentBerthAlongside' => $data['PresentBerthAlongside'],
+                'RequiredBerthAlongside'=> $data['RequiredBerthAlongside'],
+                'Remarks' => $data['Remarks'],
+                'LocationFrom' => $data['LocationFrom'],
+                'LocationTo' => $data['LocationTo'],
+                'LocationFromDescription' => $data['LocationFromDescription'],
+                'LocationToDescription' => $data['LocationToDescription'],
+                'SourceParty' => $data['SourceParty'],
+                'SourceCommsMode' => $data['SourceCommsMode'],
+                'Status' => $data['Status'],
+                'AdviceCode' => $data['AdviceCode'],
+                'TransReason' => $data['TransReason'],
+                'TransType' => $data['TransType'],
+                'DeleteReason' => $data['DeleteReason'],
+                'WaiverCode' => $data['WaiverCode'],
+                'TugBillCompany' => $data['TugBillCompany'],
+                'TugServiceProvider' => $data['TugServiceProvider'],
+                'TugBillAccountType' => $data['TugBillAccountType'],
+                'TugBillAccount' => $data['TugBillAccount'],
+                'MinPilotLicense' => $data['MinPilotLicense'],
+                'CustomerContactName' => $data['CustomerContactName'],
+                'CustomerContactHp' => $data['CustomerContactHp'],
+                'CustomerContactEmail' => $data['CustomerContactEmail'],
+                'CustContractNumber' => $data['CustContractNumber'],
+                'CustomerPoNumber' => $data['CustomerPoNumber'],
+                'VesselArrCfmCode' => $data['VesselArrCfmCode'],
+                'HoldBillIndicator' => $data['HoldBillIndicator'],
+                'PilotCount' => $data['PilotCount'],
+                'agent_id' => $data['agent_id'],
+                'VesselVoyageNumber' => $data['VesselVoyageNumber'],
+                'AssistByTowVessel' => $data['AssistByTowVessel'],
+                'AICGranted' => $data['AICGranted'],
+                'QuarantineRequired' => $data['QuarantineRequired'],
+                'SpecialTugRequest' => $data['SpecialTugRequest'],
+                'TugUnberthingNumber' => $data['TugUnberthingNumber'],
+                'TugNumber' => $data['TugNumber'],
+                'JobDuration' => $data['JobDuration'],
+                'VesselArrivalDirection' => $data['VesselArrivalDirection'],
+                'VesselSelfPropelling' => $data['VesselSelfPropelling'],
+                'VesselCallN' => $data['VesselCallN']
+            ];
+            $pilotage = PilotageOrder::where('OrderNumber', $id)->first();
+            if (isset($pilotage) && !empty($pilotage)) {
+                $pilotage_update = PilotageOrder::where('id', $pilotage->id)->update($pilotage_order_data);
+                if (!$pilotage_update) {
+                    Log::error('Mos Synchronize: Pilotage order could not update');
+                }
 
-        // Order Linking to oil terminal order
-        try{
-            Log::info('In update order: Trying linking pilotage order to existing terminal orders for existing agent...');
-            $this->OrderLinkToTerminalOrdersAtUpdate($data,$agent_id,$this->order,$pilotage_order, $data);
-            Log::info('Linking process done...');
-        }catch (\Exception $e){
-            Log::info('Problem with order linking...:-'.$e->getMessage());
-        }
+                if (isset($data['LocationTo']) && !empty($data['LocationTo'])) {
+                    BunkerActivity::where(['OrderNumber'=>$data['OrderNumber']])->update(['ActivityLocation' => $data['LocationTo']]);
+                }
 
-        $pilotage = PilotageOrder::where('OrderNumber', $id)->first();
-        $data['ETBDate'] = trim($data['ETBDate']);
-        $pilotage_order_data = [
-            'vessel_id' => $data['VesselID'],
-            'OrderNumber' => $data['OrderNumber'],
-            'CustAccount' => $data['CustAccount'],
-            'JobType' => $data['JobType'], 
-            'PilotJobType' => $data['PilotJobType'],
-            'EventAlertIndicator' => $data['EventAlertIndicator'],
-            'TOADate' => $data['TOADate'],
-            'CSTDate' => $data['CSTDate'],
-            'SRTDate' => $data['SRTDate'],
-            'ETBDate' => $data['ETBDate'],
-            'PresentBerthAlongside' => $data['PresentBerthAlongside'],
-            'RequiredBerthAlongside'=> $data['RequiredBerthAlongside'],
-            'Remarks' => $data['Remarks'],
-            'LocationFrom' => $data['LocationFrom'],
-            'LocationTo' => $data['LocationTo'],
-            'LocationFromDescription' => $data['LocationFromDescription'],
-            'LocationToDescription' => $data['LocationToDescription'],
-            'SourceParty' => $data['SourceParty'],
-            'SourceCommsMode' => $data['SourceCommsMode'],
-            'Status' => $data['Status'],
-            'AdviceCode' => $data['AdviceCode'],
-            'TransReason' => $data['TransReason'],
-            'TransType' => $data['TransType'],
-            'DeleteReason' => $data['DeleteReason'],
-            'WaiverCode' => $data['WaiverCode'],
-            'TugBillCompany' => $data['TugBillCompany'],
-            'TugServiceProvider' => $data['TugServiceProvider'],
-            'TugBillAccountType' => $data['TugBillAccountType'],
-            'TugBillAccount' => $data['TugBillAccount'],
-            'MinPilotLicense' => $data['MinPilotLicense'],
-            'CustomerContactName' => $data['CustomerContactName'],
-            'CustomerContactHp' => $data['CustomerContactHp'],
-            'CustomerContactEmail' => $data['CustomerContactEmail'],
-            'CustContractNumber' => $data['CustContractNumber'],
-            'CustomerPoNumber' => $data['CustomerPoNumber'],
-            'VesselArrCfmCode' => $data['VesselArrCfmCode'],
-            'HoldBillIndicator' => $data['HoldBillIndicator'],
-            'PilotCount' => $data['PilotCount'],
-            'agent_id' => $data['agent_id'],
-            'VesselVoyageNumber' => $data['VesselVoyageNumber'],
-            'AssistByTowVessel' => $data['AssistByTowVessel'],
-            'AICGranted' => $data['AICGranted'],
-            'QuarantineRequired' => $data['QuarantineRequired'],
-            'SpecialTugRequest' => $data['SpecialTugRequest'],
-            'TugUnberthingNumber' => $data['TugUnberthingNumber'],
-            'TugNumber' => $data['TugNumber'],
-            'JobDuration' => $data['JobDuration'],
-            'VesselArrivalDirection' => $data['VesselArrivalDirection'],
-            'VesselSelfPropelling' => $data['VesselSelfPropelling'],
-            'VesselCallN' => $data['VesselCallN']
-        ];
-        $pilotage_update = PilotageOrder::where('id', $pilotage->id)->update($pilotage_order_data);
-        if (!$pilotage_update) {
-            Log::error('Mos Synchronize: Pilotage order could not update');
-        }
+                // Update Vpc pilot table
+                if(isset($data['VesselID']) && isset($data['LocationFrom']) && isset($data['LocationTo']) && isset($data['CSTDate']) && isset($data['SRTDate']) && !empty($data['CSTDate']) && !empty($data['SRTDate']) && isset($id)){
+                    $vesselInfo = Vessel::where('vessel_id', $data['VesselID'])->first();
+                    $boarding_ground_list = config('asgard.order.status.boarding_ground');
+                    if (in_array($data['LocationFrom'], $boarding_ground_list))
+                    {
+                        $vessel_pilotage_order = VesselPilotOrder::where('order_pilot_id', $id)->first();
+                        if (isset($vessel_pilotage_order) && !empty($vessel_pilotage_order)) {
+                            $vpcInfo = [];
+                            $vpcInfo['mos_proposed_boarding_ground'] = $data['LocationFrom'];
+                            $vpcInfo['location_from'] = strtoupper($data['LocationFrom']);
+                            $vpcInfo['location_to'] = $data['LocationTo'];
+                            $vpcInfo['mos_proposed_cst'] = $data['CSTDate'];
+                            $vpcInfo['vessel_pilot_cst'] = $data['CSTDate'];
+                            $vpcInfo['vessel_cst_time_old'] = $vessel_pilotage_order->vessel_pilot_cst;
+                            $vpcInfo['vessel_arrival_time'] = $data['SRTDate'];
+                            $vpcInfo['vessel_confirm_code'] = $data['VesselArrCfmCode'];
+                            $vpcInfo['status'] = config('asgard.order.status.pilotage_status.'.$data['Status']);
 
-        if (isset($data['LocationTo']) && !empty($data['LocationTo'])) {
-            BunkerActivity::where(['OrderNumber'=>$data['OrderNumber']])->update(['ActivityLocation' => $data['LocationTo']]);
-        }
-
-        //-----Now check vessel voyage -----//
-        $pilotage_order = PilotageOrder::where('OrderNumber', $id)->first();
-        
-        // Update Vpc pilot table
-        if(isset($data['VesselID']) && isset($data['LocationFrom']) && isset($data['LocationTo']) && isset($data['CSTDate']) && isset($data['SRTDate']) && !empty($data['CSTDate']) && !empty($data['SRTDate']) && isset($id)){
-            $vesselInfo = Vessel::where('vessel_id', $data['VesselID'])->first();
-            $boarding_ground_list = config('asgard.order.status.boarding_ground');
-            if (in_array($data['LocationFrom'], $boarding_ground_list))
-            {
-                $vessel_pilotage_order = VesselPilotOrder::where('order_pilot_id', $id)->first();
-                if (isset($vessel_pilotage_order) && !empty($vessel_pilotage_order)) {
-                    $vpcInfo = [];
-                    $vpcInfo['mos_proposed_boarding_ground'] = $data['LocationFrom'];
-                    $vpcInfo['location_from'] = strtoupper($data['LocationFrom']);
-                    $vpcInfo['location_to'] = $data['LocationTo'];
-                    $vpcInfo['mos_proposed_cst'] = $data['CSTDate'];
-                    $vpcInfo['vessel_pilot_cst'] = $data['CSTDate'];
-                    $vpcInfo['vessel_cst_time_old'] = $vessel_pilotage_order->vessel_pilot_cst;
-                    $vpcInfo['vessel_arrival_time'] = $data['SRTDate'];
-                    $vpcInfo['vessel_confirm_code'] = $data['VesselArrCfmCode'];
-                    $vpcInfo['status'] = config('asgard.order.status.pilotage_status.'.$data['Status']);
-
-                    // Update vessel information
-                    $vpcInfo['vessel_id'] = $vesselInfo->vessel_id;
-                    $vpcInfo['vessel_call_sign'] = $vesselInfo->call_sign;
-                    $vpcInfo['vessel_name'] = $vesselInfo->name;
-                    try {
-                        $vesselPilotOrderUpdate = VesselPilotOrder::where('order_pilot_id', $id)->update($vpcInfo);
-                        Log::info('Vessel Pilot Order table updated with order number '. strtoupper($data['OrderNumber']));
-                    } catch (\Exception $e) {                    
-                        Log::error('Mos Synchronize: Failed to update Vessel Pilotage order, error message : '.$e->getMessage());
+                            // Update vessel information
+                            $vpcInfo['vessel_id'] = $vesselInfo->vessel_id;
+                            $vpcInfo['vessel_call_sign'] = $vesselInfo->call_sign;
+                            $vpcInfo['vessel_name'] = $vesselInfo->name;
+                            try {
+                                $vesselPilotOrderUpdate = VesselPilotOrder::where('order_pilot_id', $id)->update($vpcInfo);
+                                Log::info('Mos Synchronize: Vessel Pilot Order table updated with order number '. strtoupper($data['OrderNumber']));
+                            } catch (\Exception $e) {                    
+                                Log::error('Mos Synchronize: Failed to update Vessel Pilotage order, error message : '.$e->getMessage());
+                            }
+                        } else {
+                            $vpcNewInfo = [];
+                            $vpcNewInfo['order_pilot_id'] = $data['OrderNumber'];
+                            $pilot_order = PilotageOrder::where('OrderNumber', $id)->first();
+                            $old_cst = $data['CSTDate'];
+                            if(isset($pilot_order) && !empty($pilot_order)){
+                                $old_cst = $pilot_order->SRTDateOld;
+                            }
+                            if(isset($vesselInfo) && !empty($vesselInfo)) {
+                                $vpcNewInfo['vessel_call_sign'] = $vesselInfo->call_sign;
+                                $vpcNewInfo['vessel_name'] = $vesselInfo->name;
+                                $vpcNewInfo['vessel_id'] = $vesselInfo->vessel_id;
+                                $vpcNewInfo['location_from'] = strtoupper($data['LocationFrom']);
+                                $vpcNewInfo['location_to'] = $data['LocationTo'];
+                                $vpcNewInfo['vessel_arrival_time'] = $data['SRTDate'];
+                                $vpcNewInfo['vessel_pilot_cst'] = $data['CSTDate'];
+                                $vpcNewInfo['vessel_cst_time_old'] = $old_cst;
+                                $vpcNewInfo['vessel_confirm_code'] = $data['VesselArrCfmCode'];
+                                $vpcNewInfo['status'] = config('asgard.order.status.pilotage_status.'.$data['Status']);
+                                $vesselPilotOrder = VesselPilotOrder::create($vpcNewInfo);
+                                if (!$vesselPilotOrder) {
+                                    Log::error('Mos Synchronize: Failed to create vessel pilot order');
+                                }
+                            }
+                        }
                     }
-                } else {
-                    $vpcNewInfo = [];
-                    $vpcNewInfo['order_pilot_id'] = $data['OrderNumber'];
-                    $pilot_order = PilotageOrder::where('OrderNumber', $id)->first();
-                    $old_cst = $data['CSTDate'];
-                    if(isset($pilot_order) && !empty($pilot_order)){
-                        $old_cst = $pilot_order->SRTDateOld;
-                    }
-                    if(isset($vesselInfo) && !empty($vesselInfo)) {
-                        $vpcNewInfo['vessel_call_sign'] = $vesselInfo->call_sign;
-                        $vpcNewInfo['vessel_name'] = $vesselInfo->name;
-                        $vpcNewInfo['vessel_id'] = $vesselInfo->vessel_id;
-                        $vpcNewInfo['location_from'] = strtoupper($data['LocationFrom']);
-                        $vpcNewInfo['location_to'] = $data['LocationTo'];
-                        $vpcNewInfo['vessel_arrival_time'] = $data['SRTDate'];
-                        $vpcNewInfo['vessel_pilot_cst'] = $data['CSTDate'];
-                        $vpcNewInfo['vessel_cst_time_old'] = $old_cst;
-                        $vpcNewInfo['vessel_confirm_code'] = $data['VesselArrCfmCode'];
-                        $vpcNewInfo['status'] = config('asgard.order.status.pilotage_status.'.$data['Status']);
-                        $vesselPilotOrder = VesselPilotOrder::create($vpcNewInfo);
-                        if (!$vesselPilotOrder) {
-                            Log::error('Mos Synchronize: Failed to create vessel pilot order');
+                    else {
+                        // Remove Vesse pilot order when LocationFrom is not from boarding ground
+                        $now = (new \DateTime("now", new \DateTimeZone(Setting::get('core::default-timezone'))))->format('Y-m-d H:i:s');
+                        $id_now = $id."_".$now;
+                        $vessel_name_now = $data['VesselName']."_".$now;
+                        VesselPilotOrder::where('order_pilot_id', $id)->update(['order_pilot_id' => $id_now,'vessel_name' => $vessel_name_now]);
+                        try {
+                            VesselPilotOrder::where('order_pilot_id', $id_now)->delete();
+                            Log::info('Vessel Pilot Order table has been removed because of location from is : '. strtoupper($data['LocationFrom']));
+                        } catch (\Exception $e) {                    
+                            Log::error('Mos Synchronize: Failed to Delete Vessel Pilotage order, error message : '.$e->getMessage());
                         }
                     }
                 }
+                Log::info('Mos Synchronize: Pilot order updated with Order Number '.$data['OrderNumber'].' : Successfully ');
             }
             else {
-                // Remove Vesse pilot order when LocationFrom is not from boarding ground
-                $now = (new \DateTime("now", new \DateTimeZone(Setting::get('core::default-timezone'))))->format('Y-m-d H:i:s');
-                $id_now = $id."_".$now;
-                $vessel_name_now = $data['VesselName']."_".$now;
-                VesselPilotOrder::where('order_pilot_id', $id)->update(['order_pilot_id' => $id_now,'vessel_name' => $vessel_name_now]);
-                try {
-                    VesselPilotOrder::where('order_pilot_id', $id_now)->delete();
-                    Log::info('Vessel Pilot Order table has been removed because of location from is : '. strtoupper($data['LocationFrom']));
-                } catch (\Exception $e) {                    
-                    Log::error('Mos Synchronize: Failed to Delete Vessel Pilotage order, error message : '.$e->getMessage());
-                }
+                Log::error('Mos Synchronize: Pilot order with order number '.$id.' not found');
             }
         }
-        Log::info('Mos Synchronize: pilot order updated with Order Number '.$data['OrderNumber']);
     }
 
     public function pilotageOrderDelete($orderNumber)
@@ -552,7 +556,7 @@ class PilotageOrderSeeder extends Seeder
         // Update vessel master email when pilotage deleted
         VesselMasterEmail::where(['order_number' => $orderNumber, 'status' => 'active'])->update(['status' => 'inactive']);
         $del->delete();
-        Log::info('Mos Synchronize: pilot order deleted with Order Number '.$orderNumber);
+        Log::info('Mos Synchronize: Pilot order deleted with Order Number '.$orderNumber.' : Successfully ');
     }
 
     private function storeVesselEmail($order_id, $sent_date) {
