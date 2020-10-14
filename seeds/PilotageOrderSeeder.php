@@ -44,32 +44,33 @@ class PilotageOrderSeeder extends Seeder
         $json = File::get("database/data/pilotage_order.json");
         $datas = json_decode($json, true);
 
-        // Sort data by TOADate ASC
-        uasort($datas, function($a, $b) {
-            return strtotime($a['pilotOrder']['TOADate']) - strtotime($b['pilotOrder']['TOADate']);
-        });
+        Log::info('Pilotage order seeder started');
+        Log::info('total data : '.count($datas).' data');
 
-        $results = [];
+        // Sort data by TOADate ASC
+        // uasort($datas, function($a, $b) {
+        //     return strtotime($a['pilotOrder']['TOADate']) - strtotime($b['pilotOrder']['TOADate']);
+        // });
+
         foreach ($datas as $value) {
             $data = $value['pilotOrder'];
+            Log::info('Order Number : '. $data['OrderNumber']);
             // Check if already exist
             $pilotage_order =  PilotageOrder::where('OrderNumber', $data['OrderNumber'])->first();
             
             if($data['AdviceCode']=='N'){
                 if(!$pilotage_order){
-                    $result = $this->pilotageOrderCreate($data);
+                    $this->pilotageOrderCreate($data);
                 } else {
-                    $result = $this->pilotageOrderUpdate($data['OrderNumber'], $data);
+                    $this->pilotageOrderUpdate($data['OrderNumber'], $data);
                 }
             } elseif($data['AdviceCode']=='A' || $data['AdviceCode']=='W'){
-                $result = $this->pilotageOrderUpdate($data['OrderNumber'], $data);
+                $this->pilotageOrderUpdate($data['OrderNumber'], $data);
             } 
             elseif($data['AdviceCode']=='D'){
-                $result = $this->pilotageOrderDelete($data['OrderNumber']);
+                $this->pilotageOrderDelete($data['OrderNumber']);
             }
 
-            // Push result to see the log in the end
-            array_push($results, $result);
             if ($data['AdviceCode']!='D') {
                 if (isset($pilotage_order) && !empty($pilotage_order)) {
                     $last_pilotage_order = $pilotage_order;
@@ -78,9 +79,7 @@ class PilotageOrderSeeder extends Seeder
                     $this->storeVesselEmail($data['OrderNumber'], $current_TOA);
                 }
             }
-        }  
-        Log::info('results :');
-        Log::info($results);      
+        }    
     }
 
     public function pilotageOrderCreate($data)
@@ -278,10 +277,7 @@ class PilotageOrderSeeder extends Seeder
         if (isset($data['LocationTo']) && !empty($data['LocationTo'])){
             BunkerActivity::where(['OrderNumber'=>$data['OrderNumber']])->update(['ActivityLocation' => $data['LocationTo']]);
         }
-
-        Log::info('Mos Synchronize: pilot order created');
-        $result = ['order_number' => $data['OrderNumber'], 'msg_type' => 'Success', 'msg' => 'Pilotage Order Created Successfully'];
-        return $result;
+        Log::info('Mos Synchronize: pilot order created with Order Number '.$data['OrderNumber']);
     }
 
     public function doActivitySyncPendingTask($pilotageorder,$activity,$activities,$key,$count) {
@@ -485,7 +481,7 @@ class PilotageOrderSeeder extends Seeder
                     $vpcInfo['vessel_name'] = $vesselInfo->name;
                     try {
                         $vesselPilotOrderUpdate = VesselPilotOrder::where('order_pilot_id', $id)->update($vpcInfo);
-                        Log::info('Vessel Pilot Order table updated with order number is : '. strtoupper($data['OrderNumber']));
+                        Log::info('Vessel Pilot Order table updated with order number '. strtoupper($data['OrderNumber']));
                     } catch (\Exception $e) {                    
                         Log::error('Mos Synchronize: Failed to update Vessel Pilotage order, error message : '.$e->getMessage());
                     }
@@ -529,8 +525,7 @@ class PilotageOrderSeeder extends Seeder
                 }
             }
         }
-        $result = ['order_number' => $data['OrderNumber'], 'msg_type' => 'Success', 'msg' => 'Pilotage Order Updated Successfully'];
-        return $result;
+        Log::info('Mos Synchronize: pilot order updated with Order Number '.$data['OrderNumber']);
     }
 
     public function pilotageOrderDelete($orderNumber)
@@ -557,50 +552,55 @@ class PilotageOrderSeeder extends Seeder
         // Update vessel master email when pilotage deleted
         VesselMasterEmail::where(['order_number' => $orderNumber, 'status' => 'active'])->update(['status' => 'inactive']);
         $del->delete();
-        Log::info('Mos Synchronize: Pilotage order is deleted: Successfully');
+        Log::info('Mos Synchronize: pilot order deleted with Order Number '.$orderNumber);
     }
 
     private function storeVesselEmail($order_id, $sent_date) {
         $vpc_data  = VesselPilotOrder::where('order_pilot_id',$order_id)->first();
-        $vessel_id = $vpc_data->vessel_id;
-        $call_sign = $vpc_data->vessel_call_sign;
-        $order_number = $order_id;
-        $cst_date =  $vpc_data->vessel_pilot_cst;
-        $usr_vessel = VesselMaster::where(['vessel_id' => $vessel_id])->first();
-        if(isset($usr_vessel) && !empty($usr_vessel)){
-            $vessel_master_id = $usr_vessel->id;
-        }else{
-            $vessel_master_id = 0;
-            Log::info("Vessel Master Not Found");
-        }
-        // Change in pilot boarding time after BGPAN is acknowledged - Container terminal change timing and pilot cst is changed
-        $input_data = array(
-            'order_number' => $order_number,
-            'vessel_master_id' => $vessel_master_id,
-            'vessel_id' => $vessel_id,
-            'call_sign' => $call_sign,
-            'email_title' => "CST_CHANGE",
-            'status' => "active",
-            'cst_date' => $cst_date,
-            'email_date' => $sent_date
-        );
+        if (isset($vpc_data) && !empty($vpc_data)) {
+            $vessel_id = $vpc_data->vessel_id;
+            $call_sign = $vpc_data->vessel_call_sign;
+            $order_number = $order_id;
+            $cst_date =  $vpc_data->vessel_pilot_cst;
+            $usr_vessel = VesselMaster::where('vessel_id', $vessel_id)->first();
+            if(isset($usr_vessel) && !empty($usr_vessel)){
+                $vessel_master_id = $usr_vessel->id;
+            }else{
+                $vessel_master_id = 0;
+                Log::info("Vessel Master with vessel_id ".$vessel_id." Not Found");
+            }
+            // Change in pilot boarding time after BGPAN is acknowledged - Container terminal change timing and pilot cst is changed
+            $input_data = array(
+                'order_number' => $order_number,
+                'vessel_master_id' => $vessel_master_id,
+                'vessel_id' => $vessel_id,
+                'call_sign' => $call_sign,
+                'email_title' => "CST_CHANGE",
+                'status' => "active",
+                'cst_date' => $cst_date,
+                'email_date' => $sent_date
+            );
 
-        // Check if vessel master email created with same current cst and title bgpan amend
-        $vm_email_sent_bgpan_amend = VesselMasterEmail::where(['order_number'=> $order_number, 'email_title' => "BGPAN_AMEND", 'cst_date' => $cst_date])->first();
+            // Check if vessel master email created with same current cst and title bgpan amend
+            $vm_email_sent_bgpan_amend = VesselMasterEmail::where(['order_number'=> $order_number, 'email_title' => "BGPAN_AMEND", 'cst_date' => $cst_date])->first();
 
-        if(empty($vm_email_sent_bgpan_amend)) {
-            $last_vm_email = VesselMasterEmail::where('order_number', $order_number)->where('vessel_id', $vessel_id)->where('vessel_master_id', $vessel_master_id)->where('email_title', 'CST_CHANGE')->where('cst_date', $cst_date)->orderBy('updated_at', 'desc')->first();
-            if (empty($last_vm_email)) {
-                // Create Vessel Master Email
-                VesselMasterEmail::create($input_data);
-                // Update vessel_time_old with current vessel pilot cst 
-                VesselPilotOrder::where('order_pilot_id', $vpc_data->order_pilot_id)->update(['vessel_cst_time_old' => $vpc_data->vessel_pilot_cst]);
-                Log::info('Vessel Master Email created');
+            if(empty($vm_email_sent_bgpan_amend)) {
+                $last_vm_email = VesselMasterEmail::where('order_number', $order_number)->where('vessel_id', $vessel_id)->where('vessel_master_id', $vessel_master_id)->where('email_title', 'CST_CHANGE')->where('cst_date', $cst_date)->orderBy('updated_at', 'desc')->first();
+                if (empty($last_vm_email)) {
+                    // Create Vessel Master Email
+                    VesselMasterEmail::create($input_data);
+                    // Update vessel_time_old with current vessel pilot cst 
+                    VesselPilotOrder::where('order_pilot_id', $vpc_data->order_pilot_id)->update(['vessel_cst_time_old' => $vpc_data->vessel_pilot_cst]);
+                    Log::info('Vessel Master Email created with order number '. $vpc_data->order_pilot_id);
+                }
+            }
+            else {
+                Log::info('Vessel Master Email exists');
             }
         }
         else {
-            Log::info('Vessel Master Email exists');
-        }
+            Log::error('This Order Number '.$order_id.' not found in vessel pilot order');
+        }        
     }
 
     public function OrderLinkToTerminalOrders($data,$agent_id, $order){
