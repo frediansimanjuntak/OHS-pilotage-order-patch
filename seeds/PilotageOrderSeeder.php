@@ -361,9 +361,9 @@ class PilotageOrderSeeder extends Seeder
             $phoneNo = '+65'.$data['CustomerContactHp'];
             $agent_id = Agent::where('phone_number', $phoneNo)->first();
         }
-        if(isset($agent_id)){
-            $data['agent_id'] = $agent_id->user_id;
-        }
+        
+        $data['agent_id'] = isset($agent_id) ? $agent_id->user_id : 0;
+        
         // Update vessel table with latest Mos table data
         if (isset($data['VesselID']) && !empty($tdata['VesselID'])) {
             $vessel = Vessel::where('vessel_id', $data['VesselID'])->first();
