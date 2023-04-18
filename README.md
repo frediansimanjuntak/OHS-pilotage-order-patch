@@ -16,9 +16,15 @@ Here the seeder data to execute data patch that resources from json
 
 5. Put data to the json file, the format like the current data in that file.
 
-6. To run the seeder you can use this command, and data patch will execute.
+6. To run the pilotage order seeder you can use this command, and data patch will execute.
 
     `php artisan db:seed --class=PilotageOrderSeeder`
     
     `php artisan db:seed --class=PilotEventSeeder`
+
+7. To run the towage order seeder you can use this command, and data patch will execute.
+
+    `php artisan db:seed --class=TowageOrderSeeder`
+    
+    `php artisan db:seed --class=TowageEventSeeder`
 
